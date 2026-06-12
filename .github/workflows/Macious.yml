@@ -12,7 +12,7 @@ jobs:
       - name: Install Tailscale
         run: brew install tailscale
 
-      - name: Start Tailscale daemon
+      - name: Start Tailscale
         run: |
           sudo tailscaled --state=/var/lib/tailscale/tailscaled.state --tun=userspace-networking &
           sleep 10
@@ -20,28 +20,45 @@ jobs:
       - name: Install NoMachine
         run: |
           brew install --cask nomachine
-          
-          # Start NoMachine server
           sudo /Applications/NoMachine.app/Contents/MacOS/nxserver --start || true
-          sleep 8
+          sleep 10
 
-      - name: Force Headless Display & Permissions
+      - name: Force Headless Display + Permissions
         run: |
-          # Stronger headless setup (helps prevent black screen)
           sudo defaults write /Library/Preferences/com.apple.windowserver DisplayResolutionEnabled -bool false
           sudo killall WindowServer 2>/dev/null || true
-          sleep 15
-          
-          # Reset privacy permissions
-          sudo tccutil reset ScreenCapture 2>/dev/null || true
-          sudo tccutil reset Accessibility 2>/dev/null || true
-          sudo tccutil reset ScreenRecording 2>/dev/null || true
+          sleep 20
 
-      - name: Enable Auto Login (runner user)
+          # Reset all privacy stuff that causes black screen
+          sudo tccutil reset ScreenCapture 2>/dev/null || true
+          sudo tccutil reset ScreenRecording 2>/dev/null || true
+          sudo tccutil reset Accessibility 2>/dev/null || true
+          sudo tccutil reset All 2>/dev/null || true
+
+      - name: Enable Auto Login + Set Password
         run: |
-          USER=$(whoami)
+          USER="runner"
+          PASS="123456"
+          
+          echo "Setting password for $USER..."
+          sudo dscl . -passwd /Users/$USER "$PASS"
+          
+          echo "Enabling auto-login..."
           sudo defaults write /Library/Preferences/com.apple.loginwindow AutoLoginUser -string "$USER"
-          echo "Auto-login enabled for user: $USER"
+          
+          echo "Password set to: $PASS"
+
+      - name: Configure NoMachine (Allow all + password auth)
+        run: |
+          sudo nxserver --stop || true
+          sleep 3
+          
+          # Enable password authentication
+          sudo sed -i '' 's/#EnablePasswordAuth 0/EnablePasswordAuth 1/' /etc/nxserver/node.cfg 2>/dev/null || true
+          sudo sed -i '' 's/#EnablePasswordAuth 0/EnablePasswordAuth 1/' /usr/NX/etc/node.cfg 2>/dev/null || true
+          
+          sudo nxserver --start
+          sleep 8
 
       - name: Connect Tailscale
         run: |
@@ -53,21 +70,24 @@ jobs:
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Show Connection Info
+      - name: Final Connection Info
         run: |
-          echo "Waiting for services to stabilize..."
-          sleep 45
+          echo "Waiting for full stabilization..."
+          sleep 60
           
           ip=$(tailscale ip -4)
           echo ""
-          echo "=== NoMachine Connection Details ==="
+          echo "========================================"
+          echo "✅ NoMachine READY"
           echo "Host: $ip"
           echo "Port: 4000"
           echo "Username: runner"
-          echo "Password: (your macOS user password - usually blank on GitHub runners)"
-          echo ""
-          echo "Download NoMachine client from: https://www.nomachine.com/download"
-          echo "Connect using NX protocol to the Tailscale IP above."
+          echo "Password: 123456"
+          echo "========================================"
+          echo "1. Download NoMachine client: https://www.nomachine.com/download"
+          echo "2. Connect to $ip:4000"
+          echo "3. Use username + password above"
+          echo "If black screen → disconnect & reconnect 1-2 times"
 
       - name: Keep alive
         run: while true; do sleep 300; done
