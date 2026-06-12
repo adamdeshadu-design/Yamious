@@ -25,7 +25,7 @@ jobs:
           sudo defaults write /var/db/launchd.db/com.apple.launchd/overrides.plist com.apple.screensharing -dict Disabled -bool false
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
 
-      - name: Set VNC Password (Fixed)
+      - name: Set VNC Password
         run: |
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate -configure -access -on -restart -agent -privs -all \
@@ -34,9 +34,11 @@ jobs:
 
       - name: Reset Screen Sharing Service
         run: |
-          sudo pkill screensharingd 2>/dev/null || true
-          sleep 3
-          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+          sudo pkill -f ScreensharingAgent 2>/dev/null || true
+          sudo launchctl unload /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+          sleep 5
+          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
+          echo "Screen Sharing service reset"
 
       - name: Connect Tailscale
         run: |
@@ -44,14 +46,23 @@ jobs:
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Get IP
+      - name: Wait for desktop and get IP
         run: |
-          sleep 10
+          echo "Waiting 90 seconds for macOS desktop to fully load..."
+          sleep 90
           ip=$(tailscale ip -4)
           echo ""
+          echo "========================================"
+          echo "VNC CONNECTION INFO"
+          echo "========================================"
           echo "Address: $ip"
           echo "Port: 5900"
           echo "Password: macpass123"
+          echo ""
+          echo "VNC client settings:"
+          echo "  - Color: 24-bit (True Color)"
+          echo "  - Encoding: Tight or ZRLE"
+          echo "========================================"
 
       - name: Keep alive
         run: while true; do sleep 300; done
