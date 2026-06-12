@@ -20,51 +20,46 @@ jobs:
       - name: Install NoMachine
         run: |
           brew install --cask nomachine
-          sudo /Applications/NoMachine.app/Contents/MacOS/nxserver --start || true
-          sleep 8
+          sleep 10
 
-      - name: Force Headless Display & Fix Permissions
+      - name: Force Headless Display & Permissions
         run: |
           sudo defaults write /Library/Preferences/com.apple.windowserver DisplayResolutionEnabled -bool false
           sudo killall WindowServer 2>/dev/null || true
-          sleep 20
+          sleep 25
 
-          # Reset permissions that often cause black screen
           sudo tccutil reset ScreenCapture 2>/dev/null || true
           sudo tccutil reset ScreenRecording 2>/dev/null || true
           sudo tccutil reset Accessibility 2>/dev/null || true
           sudo tccutil reset All 2>/dev/null || true
 
-      - name: Set Password + Auto Login (Fixed for GitHub Runner)
+      - name: Enable Auto Login (runner user)
         run: |
           USER="runner"
-          PASS="123456"
-          
-          echo "Setting password for $USER..."
-          
-          # Primary method
-          sudo sysadminctl -adminUser "$USER" -adminPassword "" -resetPasswordFor "$USER" -newPassword "$PASS" || true
-          
-          # Fallback methods
-          sudo dscl . -passwd /Users/$USER "$PASS" 2>/dev/null || true
-          echo "$PASS" | sudo dscl . -passwd /Users/$USER "" 2>/dev/null || true
-          
-          echo "Enabling auto-login..."
+          echo "Enabling auto-login for $USER..."
           sudo defaults write /Library/Preferences/com.apple.loginwindow AutoLoginUser -string "$USER"
-          
-          echo "✅ Password successfully set to: $PASS"
+          echo "✅ Auto-login enabled"
 
-      - name: Configure & Restart NoMachine
+      - name: Start & Configure NoMachine
         run: |
-          sudo nxserver --stop || true
+          echo "Configuring NoMachine..."
+          
+          # Stop if running
+          sudo /etc/NX/nxserver --stop 2>/dev/null || true
           sleep 5
           
-          # Enable password authentication
-          sudo sed -i '' 's/EnablePasswordAuth.*/EnablePasswordAuth 1/' /etc/nxserver/node.cfg 2>/dev/null || true
-          sudo sed -i '' 's/EnablePasswordAuth.*/EnablePasswordAuth 1/' /usr/NX/etc/node.cfg 2>/dev/null || true
+          # Enable password authentication and other options
+          sudo mkdir -p /etc/NX/etc
+          sudo tee -a /etc/NX/etc/node.cfg > /dev/null <<EOF
+          EnablePasswordAuth 1
+          EnableUserDB 1
+          EOF
           
-          sudo nxserver --start
-          sleep 10
+          sudo /etc/NX/nxserver --start
+          sleep 12
+          
+          echo "NoMachine status:"
+          sudo /etc/NX/nxserver --status || echo "Status command failed but server should be running"
 
       - name: Connect Tailscale
         run: |
@@ -78,24 +73,23 @@ jobs:
 
       - name: Final Connection Info
         run: |
-          echo "Waiting for full stabilization..."
+          echo "Waiting for stabilization..."
           sleep 60
           
           ip=$(tailscale ip -4)
           echo ""
           echo "========================================"
-          echo "✅ SUCCESS - NoMachine is ready!"
-          echo "Host : $ip"
-          echo "Port : 4000"
+          echo "✅ NoMachine READY"
+          echo "Host     : $ip"
+          echo "Port     : 4000"
           echo "Username : runner"
-          echo "Password : 123456"
+          echo "Password : (leave blank / empty)"
           echo "========================================"
+          echo "1. Download NoMachine client: https://www.nomachine.com/download"
+          echo "2. Connect to $ip:4000"
+          echo "3. Use username: runner and leave password empty"
           echo ""
-          echo "1. Download NoMachine client → https://www.nomachine.com/download"
-          echo "2. Connect to $ip:4000 using NX protocol"
-          echo "3. Login with runner / 123456"
-          echo ""
-          echo "If you get black screen → disconnect and reconnect 1-2 times."
+          echo "💡 Black screen? Disconnect, wait 15s, reconnect 2-3 times."
 
       - name: Keep alive
         run: while true; do sleep 300; done
