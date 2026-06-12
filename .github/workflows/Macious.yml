@@ -21,44 +21,50 @@ jobs:
         run: |
           brew install --cask nomachine
           sudo /Applications/NoMachine.app/Contents/MacOS/nxserver --start || true
-          sleep 10
+          sleep 8
 
-      - name: Force Headless Display + Permissions
+      - name: Force Headless Display & Fix Permissions
         run: |
           sudo defaults write /Library/Preferences/com.apple.windowserver DisplayResolutionEnabled -bool false
           sudo killall WindowServer 2>/dev/null || true
           sleep 20
 
-          # Reset all privacy stuff that causes black screen
+          # Reset permissions that often cause black screen
           sudo tccutil reset ScreenCapture 2>/dev/null || true
           sudo tccutil reset ScreenRecording 2>/dev/null || true
           sudo tccutil reset Accessibility 2>/dev/null || true
           sudo tccutil reset All 2>/dev/null || true
 
-      - name: Enable Auto Login + Set Password
+      - name: Set Password + Auto Login (Fixed for GitHub Runner)
         run: |
           USER="runner"
           PASS="123456"
           
           echo "Setting password for $USER..."
-          sudo dscl . -passwd /Users/$USER "$PASS"
+          
+          # Primary method
+          sudo sysadminctl -adminUser "$USER" -adminPassword "" -resetPasswordFor "$USER" -newPassword "$PASS" || true
+          
+          # Fallback methods
+          sudo dscl . -passwd /Users/$USER "$PASS" 2>/dev/null || true
+          echo "$PASS" | sudo dscl . -passwd /Users/$USER "" 2>/dev/null || true
           
           echo "Enabling auto-login..."
           sudo defaults write /Library/Preferences/com.apple.loginwindow AutoLoginUser -string "$USER"
           
-          echo "Password set to: $PASS"
+          echo "✅ Password successfully set to: $PASS"
 
-      - name: Configure NoMachine (Allow all + password auth)
+      - name: Configure & Restart NoMachine
         run: |
           sudo nxserver --stop || true
-          sleep 3
+          sleep 5
           
           # Enable password authentication
-          sudo sed -i '' 's/#EnablePasswordAuth 0/EnablePasswordAuth 1/' /etc/nxserver/node.cfg 2>/dev/null || true
-          sudo sed -i '' 's/#EnablePasswordAuth 0/EnablePasswordAuth 1/' /usr/NX/etc/node.cfg 2>/dev/null || true
+          sudo sed -i '' 's/EnablePasswordAuth.*/EnablePasswordAuth 1/' /etc/nxserver/node.cfg 2>/dev/null || true
+          sudo sed -i '' 's/EnablePasswordAuth.*/EnablePasswordAuth 1/' /usr/NX/etc/node.cfg 2>/dev/null || true
           
           sudo nxserver --start
-          sleep 8
+          sleep 10
 
       - name: Connect Tailscale
         run: |
@@ -78,16 +84,18 @@ jobs:
           ip=$(tailscale ip -4)
           echo ""
           echo "========================================"
-          echo "✅ NoMachine READY"
-          echo "Host: $ip"
-          echo "Port: 4000"
-          echo "Username: runner"
-          echo "Password: 123456"
+          echo "✅ SUCCESS - NoMachine is ready!"
+          echo "Host : $ip"
+          echo "Port : 4000"
+          echo "Username : runner"
+          echo "Password : 123456"
           echo "========================================"
-          echo "1. Download NoMachine client: https://www.nomachine.com/download"
-          echo "2. Connect to $ip:4000"
-          echo "3. Use username + password above"
-          echo "If black screen → disconnect & reconnect 1-2 times"
+          echo ""
+          echo "1. Download NoMachine client → https://www.nomachine.com/download"
+          echo "2. Connect to $ip:4000 using NX protocol"
+          echo "3. Login with runner / 123456"
+          echo ""
+          echo "If you get black screen → disconnect and reconnect 1-2 times."
 
       - name: Keep alive
         run: while true; do sleep 300; done
