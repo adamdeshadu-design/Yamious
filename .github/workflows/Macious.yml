@@ -1,0 +1,41 @@
+name: m
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Install dependencies
+        run: |
+          brew install tailscale
+
+      - name: Enable Screen Sharing (VNC)
+        run: |
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -restart -agent -privs -all -allowAccessFor -allUsers
+          sudo defaults write /var/db/launchd.db/com.apple.launchd/overrides.plist com.apple.screensharing -dict Disabled -bool false
+          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+
+      - name: Set VNC password
+        run: |
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -restart -agent -privs -all -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw macpass123
+
+      - name: Connect Tailscale
+        run: |
+          sudo tailscale up --authkey $TAILSCALE_AUTH_KEY --accept-routes
+        env:
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Get IP
+        run: |
+          sleep 10
+          ip=$(tailscale ip -4)
+          echo ""
+          echo "Address: $ip"
+          echo ""
+
+      - name: Keep alive
+        run: while true; do sleep 300; done
