@@ -12,7 +12,7 @@ jobs:
       - name: dependcy
         run: |
           sudo apt update
-          sudo apt install -y xvfb libgl1-mesa-dri mesa-utils curl
+          sudo apt install -y xvfb libgl1-mesa-dri mesa-utils curl openssh-server
 
       - name: xsetup
         run: |
@@ -34,22 +34,31 @@ jobs:
       - name: connect
         run: |
           sudo tailscale up --authkey "${{ secrets.TAILSCALE_AUTH_KEY }}" --accept-routes --advertise-exit-node --reset
-          echo "✅ connected"
+          echo "✅ Tailscale connected"
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: setup-ssh
+        run: |
+          sudo systemctl start ssh
+          sudo systemctl enable ssh
+          echo "runner:WindowsRDP#2025" | sudo chpasswd
+          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+          sudo systemctl restart ssh
+          echo "🔑 SSH is ready"
+          echo "Username: runner"
+          echo "Password: WindowsRDP#2025"
 
       - name: ipcheck
         run: |
           sleep 10
           ip=$(tailscale ip -4)
-          echo ""
-          echo "Address: $ip"
-          echo ""
-          echo "IP=$ip" >> $GITHUB_ENV
+          echo "🌐 Tailscale IP: $ip"
 
       - name: keep
         run: |
-          echo "🟢 running..."
+          echo "🟢 Runner is live"
           while true; do
             sleep 300
             echo "💤 alive - $(date '+%H:%M:%S')"
