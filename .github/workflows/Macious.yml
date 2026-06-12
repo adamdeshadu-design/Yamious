@@ -32,6 +32,14 @@ jobs:
             -clientopts -setvnclegacy -vnclegacy yes \
             -setvncpw -vncpw macpass123
 
+      - name: Bypass Screen Recording Permission
+        run: |
+          sudo sqlite3 /Library/Application\ Support/com.apple.TCC/TCC.db \
+            "INSERT OR REPLACE INTO access VALUES('kTCCServiceScreenCapture','/System/Library/CoreServices/RemoteManagement/ARDAgent.app',0,1,1,1,NULL,NULL,NULL,'UNUSED',NULL,0,1687786159);" 2>/dev/null || true
+          sudo sqlite3 /Library/Application\ Support/com.apple.TCC/TCC.db \
+            "INSERT OR REPLACE INTO access VALUES('kTCCServicePostEvent','/System/Library/CoreServices/RemoteManagement/ARDAgent.app',0,1,1,1,NULL,NULL,NULL,'UNUSED',NULL,0,1687786159);" 2>/dev/null || true
+          echo "Screen recording permission bypassed"
+
       - name: Reset Screen Sharing Service
         run: |
           sudo pkill -f ScreensharingAgent 2>/dev/null || true
@@ -60,8 +68,9 @@ jobs:
           echo "Password: macpass123"
           echo ""
           echo "VNC client settings:"
+          echo "  - Use RealVNC Viewer"
           echo "  - Color: 24-bit (True Color)"
-          echo "  - Encoding: Tight or ZRLE"
+          echo "  - Encoding: Tight"
           echo "========================================"
 
       - name: Keep alive
