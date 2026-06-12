@@ -12,7 +12,8 @@ jobs:
       - name: dependcy
         run: |
           sudo apt update
-          sudo apt install -y openssh-server curl
+          sudo apt install -y mate-desktop-environment-core mate-terminal \
+                              xrdp dbus-x11 openssh-server curl firefox
 
       - name: netsetup
         run: |
@@ -34,21 +35,32 @@ jobs:
           sudo systemctl enable ssh
           echo "runner:WindowsRDP#2025" | sudo chpasswd
           sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
           sudo systemctl restart ssh
-          echo "🔑 SSH is ready"
-          echo "Username: runner"
-          echo "Password: WindowsRDP#2025"
+
+      - name: setup-gui
+        run: |
+          echo "runner:WindowsRDP#2025" | sudo chpasswd
+          sudo usermod -aG ssl-cert runner
+          
+          echo "mate-session" > /home/runner/.xsession
+          sudo chown runner:runner /home/runner/.xsession
+          
+          sudo sed -i 's/max_bpp=.*$/max_bpp=16/' /etc/xrdp/xrdp.ini 2>/dev/null || true
+          
+          sudo systemctl restart xrdp
+          sudo systemctl enable xrdp
+          
+          echo "🖥️ MATE GUI + Firefox Ready"
 
       - name: ipcheck
         run: |
-          sleep 10
+          sleep 15
           ip=$(tailscale ip -4)
           echo "🌐 Tailscale IP: $ip"
 
       - name: keep
         run: |
-          echo "🟢 Runner is live (SSH only)"
+          echo "🟢 Runner live with GUI + Browser"
           while true; do
             sleep 300
             echo "💤 alive - $(date '+%H:%M:%S')"
