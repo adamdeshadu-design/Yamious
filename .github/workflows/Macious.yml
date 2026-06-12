@@ -12,78 +12,62 @@ jobs:
       - name: Install Tailscale
         run: brew install tailscale
 
-      - name: Start Tailscale service
+      - name: Start Tailscale daemon
         run: |
-          sudo tailscaled --state=/var/lib/tailscale/tailscaled.state &
+          sudo tailscaled --state=/var/lib/tailscale/tailscaled.state --tun=userspace-networking &
+          sleep 10
+
+      - name: Install NoMachine
+        run: |
+          brew install --cask nomachine
+          
+          # Start NoMachine server
+          sudo /Applications/NoMachine.app/Contents/MacOS/nxserver --start || true
           sleep 8
 
-      - name: Enable Screen Sharing (VNC) + Set Password
+      - name: Force Headless Display & Permissions
         run: |
-          # Activate Remote Management + full access
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -activate -configure -access -on -restart -agent -privs -all -allowAccessFor -allUsers
-
-          # Enable VNC legacy mode
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -configure -clientopts -setvnclegacy -vnclegacy yes
-
-          # Set VNC password (kickstart method)
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -configure -clientopts -setvncpw -vncpw 123456
-
-          # Alternative/reliable password method for newer macOS
-          echo -n "123456" | perl -we '
-            BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA" }
-            $_ = <>;
-            chomp;
-            s/^(.{8}).*/$1/;
-            @p = unpack "C*", $_;
-            foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) }
-            print "\n"
-          ' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt > /dev/null
-
-          # Reset Screen Capture permissions (common black screen fix)
-          sudo tccutil reset ScreenCapture 2>/dev/null || true
-
-      - name: Enable & Restart Screen Sharing Service
-        run: |
-          sudo defaults write /var/db/launchd.db/com.apple.launchd/overrides.plist com.apple.screensharing -dict Disabled -bool false
-          
-          sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
-          sleep 3
-          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
-
-      - name: Force Headless Display
-        run: |
-          # Disable resolution enforcement + kill WindowServer
+          # Stronger headless setup (helps prevent black screen)
           sudo defaults write /Library/Preferences/com.apple.windowserver DisplayResolutionEnabled -bool false
           sudo killall WindowServer 2>/dev/null || true
           sleep 15
+          
+          # Reset privacy permissions
+          sudo tccutil reset ScreenCapture 2>/dev/null || true
+          sudo tccutil reset Accessibility 2>/dev/null || true
+          sudo tccutil reset ScreenRecording 2>/dev/null || true
 
-          # Extra headless tricks
-          sudo defaults write /Library/Preferences/com.apple.RemoteManagement VNCAlwaysStartOnConsole -bool true
-          sudo defaults write com.apple.screensharing Desktop -bool true
+      - name: Enable Auto Login (runner user)
+        run: |
+          USER=$(whoami)
+          sudo defaults write /Library/Preferences/com.apple.loginwindow AutoLoginUser -string "$USER"
+          echo "Auto-login enabled for user: $USER"
 
       - name: Connect Tailscale
         run: |
-          sudo tailscale up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --accept-routes --reset
+          sudo tailscale up \
+            --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} \
+            --accept-routes \
+            --reset \
+            --hostname=github-macos-runner
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Wait & Show Connection Info
+      - name: Show Connection Info
         run: |
           echo "Waiting for services to stabilize..."
           sleep 45
           
-          ip=$(tailscale ip -4 2>/dev/null || echo "IP not ready")
+          ip=$(tailscale ip -4)
           echo ""
-          echo "=== VNC Connection Details ==="
-          echo "Address: $ip"
-          echo "Port: 5900"
-          echo "Password: 123456"
+          echo "=== NoMachine Connection Details ==="
+          echo "Host: $ip"
+          echo "Port: 4000"
+          echo "Username: runner"
+          echo "Password: (your macOS user password - usually blank on GitHub runners)"
           echo ""
-          echo "Try connecting with Screen Sharing / VNC viewer (RealVNC, TightVNC, etc.)"
-          echo "If black screen persists, try reconnecting after 30s or use a different client."
+          echo "Download NoMachine client from: https://www.nomachine.com/download"
+          echo "Connect using NX protocol to the Tailscale IP above."
 
       - name: Keep alive
         run: while true; do sleep 300; done
