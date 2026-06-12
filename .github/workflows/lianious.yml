@@ -12,7 +12,7 @@ jobs:
       - name: dependcy
         run: |
           sudo apt update
-          sudo apt install -y xfce4 xfce4-goodies xrdp dbus-x11 openssh-server curl
+          sudo apt install -y openssh-server curl
 
       - name: netsetup
         run: |
@@ -36,32 +36,19 @@ jobs:
           sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
           sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
           sudo systemctl restart ssh
-          echo "🔑 SSH ready → runner / WindowsRDP#2025"
-
-      - name: setup-gui
-        run: |
-          echo "runner:WindowsRDP#2025" | sudo chpasswd
-          sudo usermod -aG ssl-cert runner
-          
-          mkdir -p /home/runner/.config
-          echo "xfce4-session" > /home/runner/.xsession
-          sudo chown -R runner:runner /home/runner/.xsession
-          
-          sudo systemctl restart xrdp
-          sudo systemctl enable xrdp
-          
-          echo "🖥️ XFCE GUI + RDP Ready"
-          echo "Use Windows Remote Desktop to connect"
+          echo "🔑 SSH is ready"
+          echo "Username: runner"
+          echo "Password: WindowsRDP#2025"
 
       - name: ipcheck
         run: |
-          sleep 12
+          sleep 10
           ip=$(tailscale ip -4)
           echo "🌐 Tailscale IP: $ip"
 
       - name: keep
         run: |
-          echo "🟢 Runner is live with GUI"
+          echo "🟢 Runner is live (SSH only)"
           while true; do
             sleep 300
             echo "💤 alive - $(date '+%H:%M:%S')"
