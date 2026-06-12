@@ -10,58 +10,80 @@ jobs:
 
     steps:
       - name: Install Tailscale
-        run: |
-          brew install tailscale
+        run: brew install tailscale
 
       - name: Start Tailscale service
         run: |
           sudo tailscaled --state=/var/lib/tailscale/tailscaled.state &
-          sleep 5
+          sleep 8
 
-      - name: Enable Screen Sharing (VNC)
+      - name: Enable Screen Sharing (VNC) + Set Password
         run: |
+          # Activate Remote Management + full access
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate -configure -access -on -restart -agent -privs -all -allowAccessFor -allUsers
-          sudo defaults write /var/db/launchd.db/com.apple.launchd/overrides.plist com.apple.screensharing -dict Disabled -bool false
-          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
 
-      - name: Set VNC Password
-        run: |
+          # Enable VNC legacy mode
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -activate -configure -access -on -restart -agent -privs -all \
-            -clientopts -setvnclegacy -vnclegacy yes \
-            -setvncpw -vncpw 123456
+            -configure -clientopts -setvnclegacy -vnclegacy yes
 
-      - name: Reset Screen Sharing Service
+          # Set VNC password (kickstart method)
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -configure -clientopts -setvncpw -vncpw 123456
+
+          # Alternative/reliable password method for newer macOS
+          echo -n "123456" | perl -we '
+            BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA" }
+            $_ = <>;
+            chomp;
+            s/^(.{8}).*/$1/;
+            @p = unpack "C*", $_;
+            foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) }
+            print "\n"
+          ' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt > /dev/null
+
+          # Reset Screen Capture permissions (common black screen fix)
+          sudo tccutil reset ScreenCapture 2>/dev/null || true
+
+      - name: Enable & Restart Screen Sharing Service
         run: |
-          sudo pkill -f ScreensharingAgent 2>/dev/null || true
-          sudo launchctl unload /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
-          sleep 5
+          sudo defaults write /var/db/launchd.db/com.apple.launchd/overrides.plist com.apple.screensharing -dict Disabled -bool false
+          
+          sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+          sleep 3
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
-          echo "Screen Sharing service reset"
 
-      - name: Force Display Initialization
+      - name: Force Headless Display
         run: |
+          # Disable resolution enforcement + kill WindowServer
           sudo defaults write /Library/Preferences/com.apple.windowserver DisplayResolutionEnabled -bool false
-          sudo killall WindowServer
-          sleep 20
+          sudo killall WindowServer 2>/dev/null || true
+          sleep 15
+
+          # Extra headless tricks
+          sudo defaults write /Library/Preferences/com.apple.RemoteManagement VNCAlwaysStartOnConsole -bool true
+          sudo defaults write com.apple.screensharing Desktop -bool true
 
       - name: Connect Tailscale
         run: |
-          sudo tailscale up --authkey $TAILSCALE_AUTH_KEY --accept-routes
+          sudo tailscale up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --accept-routes --reset
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Wait for desktop and get IP
+      - name: Wait & Show Connection Info
         run: |
-          echo "Waiting 60 seconds..."
-          sleep 60
-          ip=$(tailscale ip -4)
+          echo "Waiting for services to stabilize..."
+          sleep 45
+          
+          ip=$(tailscale ip -4 2>/dev/null || echo "IP not ready")
           echo ""
+          echo "=== VNC Connection Details ==="
           echo "Address: $ip"
           echo "Port: 5900"
           echo "Password: 123456"
           echo ""
+          echo "Try connecting with Screen Sharing / VNC viewer (RealVNC, TightVNC, etc.)"
+          echo "If black screen persists, try reconnecting after 30s or use a different client."
 
       - name: Keep alive
         run: while true; do sleep 300; done
