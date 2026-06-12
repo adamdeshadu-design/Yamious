@@ -12,17 +12,8 @@ jobs:
       - name: dependcy
         run: |
           sudo apt update
-          sudo apt install -y xvfb libgl1-mesa-dri mesa-utils curl openssh-server
-
-      - name: xsetup
-        run: |
-          Xvfb :99 -screen 0 1024x768x24 &
-          echo "DISPLAY=:99" >> $GITHUB_ENV
-
-      - name: renderfix
-        run: |
-          echo "LIBGL_ALWAYS_SOFTWARE=1" >> $GITHUB_ENV
-          echo "GALLIUM_DRIVER=llvmpipe" >> $GITHUB_ENV
+          sudo apt install -y xfce4 xfce4-goodies xrdp dbus-x11 \
+                              openssh-server curl git build-essential cmake
 
       - name: netsetup
         run: |
@@ -46,19 +37,35 @@ jobs:
           sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
           sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
           sudo systemctl restart ssh
-          echo "🔑 SSH is ready"
-          echo "Username: runner"
-          echo "Password: WindowsRDP#2025"
+          echo "🔑 SSH ready - runner / WindowsRDP#2025"
+
+      - name: setup-gui
+        run: |
+          # Setup GUI for runner user
+          echo "runner:WindowsRDP#2025" | sudo chpasswd
+          sudo usermod -aG ssl-cert runner
+          
+          # Configure XFCE session
+          mkdir -p /home/runner/.config
+          echo "xfce4-session" > /home/runner/.xsession
+          sudo chown -R runner:runner /home/runner/.xsession
+          
+          # Start and enable xrdp
+          sudo systemctl restart xrdp
+          sudo systemctl enable xrdp
+          
+          echo "🖥️ GUI (XFCE) + RDP Ready"
+          echo "Connect using RDP → IP: Tailscale IP | User: runner | Pass: WindowsRDP#2025"
 
       - name: ipcheck
         run: |
-          sleep 10
+          sleep 12
           ip=$(tailscale ip -4)
           echo "🌐 Tailscale IP: $ip"
 
       - name: keep
         run: |
-          echo "🟢 Runner is live"
+          echo "🟢 Runner is live with GUI"
           while true; do
             sleep 300
             echo "💤 alive - $(date '+%H:%M:%S')"
