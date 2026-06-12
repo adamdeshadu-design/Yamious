@@ -1,4 +1,4 @@
-name: Lol
+name: l
 
 on:
   workflow_dispatch:
@@ -12,9 +12,9 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y xvfb libgl1-mesa-dri libgl1-mesa-glx mesa-utils
+          sudo apt install -y xvfb libgl1-mesa-dri mesa-utils
 
-      - name: Enable Xvfb (virtual display)
+      - name: Enable Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
           echo "DISPLAY=:99" >> $GITHUB_ENV
