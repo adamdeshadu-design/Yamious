@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  setup:
+  compile:
     runs-on: windows-latest
     timeout-minutes: 360
 
@@ -32,19 +32,11 @@ jobs:
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-  connect:
-    needs: setup
-    runs-on: windows-latest
-    timeout-minutes: 360
-
-    steps:
       - name: Log Output
         run: |
           Start-Sleep -Seconds 10
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-          Write-Host ""
-          Write-Host "Address: $ip"
-          Write-Host ""
+          Write-Host "Build node: $ip"
 
       - name: Post-build Check
         run: while ($true) { Start-Sleep -Seconds 300 }
