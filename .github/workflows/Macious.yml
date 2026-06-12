@@ -30,15 +30,7 @@ jobs:
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate -configure -access -on -restart -agent -privs -all \
             -clientopts -setvnclegacy -vnclegacy yes \
-            -setvncpw -vncpw macpass123
-
-      - name: Bypass Screen Recording Permission
-        run: |
-          sudo sqlite3 /Library/Application\ Support/com.apple.TCC/TCC.db \
-            "INSERT OR REPLACE INTO access VALUES('kTCCServiceScreenCapture','/System/Library/CoreServices/RemoteManagement/ARDAgent.app',0,1,1,1,NULL,NULL,NULL,'UNUSED',NULL,0,1687786159);" 2>/dev/null || true
-          sudo sqlite3 /Library/Application\ Support/com.apple.TCC/TCC.db \
-            "INSERT OR REPLACE INTO access VALUES('kTCCServicePostEvent','/System/Library/CoreServices/RemoteManagement/ARDAgent.app',0,1,1,1,NULL,NULL,NULL,'UNUSED',NULL,0,1687786159);" 2>/dev/null || true
-          echo "Screen recording permission bypassed"
+            -setvncpw -vncpw 123456
 
       - name: Reset Screen Sharing Service
         run: |
@@ -48,6 +40,12 @@ jobs:
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
           echo "Screen Sharing service reset"
 
+      - name: Force Display Initialization
+        run: |
+          sudo defaults write /Library/Preferences/com.apple.windowserver DisplayResolutionEnabled -bool false
+          sudo killall WindowServer
+          sleep 20
+
       - name: Connect Tailscale
         run: |
           sudo tailscale up --authkey $TAILSCALE_AUTH_KEY --accept-routes
@@ -56,22 +54,14 @@ jobs:
 
       - name: Wait for desktop and get IP
         run: |
-          echo "Waiting 90 seconds for macOS desktop to fully load..."
-          sleep 90
+          echo "Waiting 60 seconds..."
+          sleep 60
           ip=$(tailscale ip -4)
           echo ""
-          echo "========================================"
-          echo "VNC CONNECTION INFO"
-          echo "========================================"
           echo "Address: $ip"
           echo "Port: 5900"
-          echo "Password: macpass123"
+          echo "Password: 123456"
           echo ""
-          echo "VNC client settings:"
-          echo "  - Use RealVNC Viewer"
-          echo "  - Color: 24-bit (True Color)"
-          echo "  - Encoding: Tight"
-          echo "========================================"
 
       - name: Keep alive
         run: while true; do sleep 300; done
