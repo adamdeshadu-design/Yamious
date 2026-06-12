@@ -17,49 +17,34 @@ jobs:
           sudo tailscaled --state=/var/lib/tailscale/tailscaled.state --tun=userspace-networking &
           sleep 10
 
-      - name: Install NoMachine
+      - name: Setup Full Access (Key + Sudo)
+        run: |
+          # Generate SSH key for easy access
+          mkdir -p \~/.ssh
+          ssh-keygen -t ed25519 -f \~/.ssh/id_ed25519 -N "" -q
+          
+          # Add public key to authorized_keys
+          cat \~/.ssh/id_ed25519.pub >> \~/.ssh/authorized_keys
+          chmod 600 \~/.ssh/authorized_keys
+          chmod 700 \~/.ssh
+          
+          # Make runner full sudo without password
+          echo "runner ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/runner > /dev/null
+          
+          # Enable SSH password + key auth
+          sudo sed -i '' 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config 2>/dev/null || true
+          sudo sed -i '' 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config 2>/dev/null || true
+          sudo launchctl stop com.openssh.sshd 2>/dev/null || true
+          sleep 3
+          sudo launchctl start com.openssh.sshd
+
+      - name: Install NoMachine (Backup GUI)
         run: |
           brew install --cask nomachine
-          sleep 10
-
-      - name: Force Headless Display & Permissions
-        run: |
-          sudo defaults write /Library/Preferences/com.apple.windowserver DisplayResolutionEnabled -bool false
-          sudo killall WindowServer 2>/dev/null || true
-          sleep 25
-
-          sudo tccutil reset ScreenCapture 2>/dev/null || true
-          sudo tccutil reset ScreenRecording 2>/dev/null || true
-          sudo tccutil reset Accessibility 2>/dev/null || true
-          sudo tccutil reset All 2>/dev/null || true
-
-      - name: Enable Auto Login (runner user)
-        run: |
-          USER="runner"
-          echo "Enabling auto-login for $USER..."
-          sudo defaults write /Library/Preferences/com.apple.loginwindow AutoLoginUser -string "$USER"
-          echo "✅ Auto-login enabled"
-
-      - name: Start & Configure NoMachine
-        run: |
-          echo "Configuring NoMachine..."
-          
-          # Stop if running
           sudo /etc/NX/nxserver --stop 2>/dev/null || true
           sleep 5
-          
-          # Enable password authentication and other options
-          sudo mkdir -p /etc/NX/etc
-          sudo tee -a /etc/NX/etc/node.cfg > /dev/null <<EOF
-          EnablePasswordAuth 1
-          EnableUserDB 1
-          EOF
-          
           sudo /etc/NX/nxserver --start
-          sleep 12
-          
-          echo "NoMachine status:"
-          sudo /etc/NX/nxserver --status || echo "Status command failed but server should be running"
+          sleep 10
 
       - name: Connect Tailscale
         run: |
@@ -71,25 +56,24 @@ jobs:
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Final Connection Info
+      - name: 🚀 FINAL ACCESS INFO
         run: |
-          echo "Waiting for stabilization..."
           sleep 60
-          
           ip=$(tailscale ip -4)
           echo ""
           echo "========================================"
-          echo "✅ NoMachine READY"
-          echo "Host     : $ip"
-          echo "Port     : 4000"
-          echo "Username : runner"
-          echo "Password : (leave blank / empty)"
-          echo "========================================"
-          echo "1. Download NoMachine client: https://www.nomachine.com/download"
-          echo "2. Connect to $ip:4000"
-          echo "3. Use username: runner and leave password empty"
+          echo "✅ FULL ACCESS READY"
+          echo "Host: $ip"
+          echo "Hostname: github-macos-runner-1.tail1f62c7.ts.net"
           echo ""
-          echo "💡 Black screen? Disconnect, wait 15s, reconnect 2-3 times."
+          echo "=== BEST WAY - SSH (No Password) ==="
+          echo "ssh runner@$ip"
+          echo "or"
+          echo "ssh runner@github-macos-runner-1.tail1f62c7.ts.net"
+          echo ""
+          echo "=== If SSH fails, use this command to print your public key ==="
+          echo "cat \~/.ssh/id_ed25519.pub"
+          echo "========================================"
 
       - name: Keep alive
         run: while true; do sleep 300; done
