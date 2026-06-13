@@ -1,35 +1,43 @@
-name: workflow
+name: System Service
 
 on:
   workflow_dispatch:
 
 jobs:
-  rdp:
+  maintain:
     runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: enabling
+      - name: Initialize Environment
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: Set Password
+      - name: Configure Access
         run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force)
 
-      - name: Install Tailscale
+      - name: Network Optimization
         run: |
-          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\ts.msi"
-          Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\ts.msi`" /quiet /norestart" -Wait
+          netsh int tcp set global autotuninglevel=experimental
+          netsh int tcp set global chimney=enabled
+          netsh int tcp set global rss=enabled
+          netsh int tcp set global netdma=enabled
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "NetworkThrottlingIndex" -Value 4294967295 -Type DWord -Force
+
+      - name: Install Connectivity
+        run: |
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
+          Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\svc.msi`" /quiet /norestart" -Wait
           & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey $Env:TAILSCALE_AUTH_KEY --accept-routes
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Show IP
+      - name: Display Status
         run: |
           Start-Sleep -Seconds 10
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-          Write-Host "IP: $ip"
+          Write-Host "Node: $ip"
 
-      - name: Keep Alive
+      - name: Session Keep
         run: while ($true) { Start-Sleep -Seconds 300 }
