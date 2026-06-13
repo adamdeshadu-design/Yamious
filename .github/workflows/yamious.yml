@@ -17,15 +17,7 @@ jobs:
       - name: Configure Access
         run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force)
 
-      - name: Network Optimization
-        run: |
-          netsh int tcp set global autotuninglevel=experimental
-          netsh int tcp set global chimney=enabled
-          netsh int tcp set global rss=enabled
-          netsh int tcp set global netdma=enabled
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "NetworkThrottlingIndex" -Value 4294967295 -Type DWord -Force
-
-      - name: Install Connectivity
+      - name: Install Components
         run: |
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
           Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\svc.msi`" /quiet /norestart" -Wait
