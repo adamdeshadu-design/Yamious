@@ -1,77 +1,35 @@
-name: CI Workflow
+name: RDP
 
 on:
   workflow_dispatch:
 
 jobs:
-  compile:
+  rdp:
     runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Runner
+      - name: Enable RDP
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: Set Preferences
-        run: |
-          $pass = ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force
-          Set-LocalUser -Name "runneradmin" -Password $pass
-
-      - name: Performance Optimization
-        run: |
-          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -Force
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "SystemResponsiveness" -Value 0 -Type DWord -Force
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "NetworkThrottlingIndex" -Value 4294967295 -Type DWord -Force
-          Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Force
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" -Name "HwSchMode" -Value 2 -Type DWord -Force
-
-      - name: Disable Defender
-        run: |
-          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v DisableAntiSpyware /t REG_DWORD /d 1 /f
-          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v DisableRealtimeMonitoring /t REG_DWORD /d 1 /f
-          Stop-Service -Name WinDefend -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name wscsvc -Force -ErrorAction SilentlyContinue
-
-      - name: Disable Background Services
-        run: |
-          Set-Service -Name SysMain -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name WSearch -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name wuauserv -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name BITS -StartupType Disabled -ErrorAction SilentlyContinue
-          Stop-Service -Name SysMain -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name WSearch -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name BITS -Force -ErrorAction SilentlyContinue
-
-      - name: Network Optimization
-        run: |
-          netsh int tcp set global autotuninglevel=normal
-          netsh int tcp set global chimney=enabled
-          netsh int tcp set global rss=enabled
+      - name: Set Password
+        run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force)
 
       - name: Install Tailscale
         run: |
-          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\tailscale.msi"
-          Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\tailscale.msi`" /quiet /norestart" -Wait
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\ts.msi"
+          Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\ts.msi`" /quiet /norestart" -Wait
           & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey $Env:TAILSCALE_AUTH_KEY --accept-routes
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Show Connection Info
+      - name: Show IP
         run: |
           Start-Sleep -Seconds 10
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-          Write-Host ""
           Write-Host "IP: $ip"
-          Write-Host "Password: WindowsRDP#2025"
-          Write-Host ""
 
       - name: Keep Alive
         run: while ($true) { Start-Sleep -Seconds 300 }
