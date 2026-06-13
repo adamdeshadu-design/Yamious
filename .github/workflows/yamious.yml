@@ -30,83 +30,31 @@ jobs:
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "SystemResponsiveness" -Value 0 -Type DWord -Force
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "NetworkThrottlingIndex" -Value 4294967295 -Type DWord -Force
           Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Force
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "NtfsDisableLastAccessUpdate" -Value 1 -Type DWord -Force
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" -Name "LargeSystemCache" -Value 1 -Type DWord -Force
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Dfrg\BootOptimizeFunction" -Name "Enable" -Value "Y" -Force
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" -Name "HwSchMode" -Value 2 -Type DWord -Force
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" -Name "GPU Priority" -Value 8 -Type DWord -Force
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" -Name "Priority" -Value 6 -Type DWord -Force
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" -Name "Scheduling Category" -Value "High" -Force
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" -Name "SFIO Priority" -Value "High" -Force
 
       - name: Disable Defender
         run: |
           reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v DisableAntiSpyware /t REG_DWORD /d 1 /f
           reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v DisableRealtimeMonitoring /t REG_DWORD /d 1 /f
-          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v DisableBehaviorMonitoring /t REG_DWORD /d 1 /f
-          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v DisableOnAccessProtection /t REG_DWORD /d 1 /f
-          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v DisableScanOnRealtimeEnable /t REG_DWORD /d 1 /f
           Stop-Service -Name WinDefend -Force -ErrorAction SilentlyContinue
-          Set-Service -Name WinDefend -StartupType Disabled -ErrorAction SilentlyContinue
           Stop-Service -Name wscsvc -Force -ErrorAction SilentlyContinue
 
       - name: Disable Background Services
         run: |
           Set-Service -Name SysMain -StartupType Disabled -ErrorAction SilentlyContinue
           Set-Service -Name WSearch -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name dmwappushservice -StartupType Disabled -ErrorAction SilentlyContinue
           Set-Service -Name wuauserv -StartupType Disabled -ErrorAction SilentlyContinue
           Set-Service -Name BITS -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name WerSvc -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name WpnService -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name PcaSvc -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name TabletInputService -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name XboxNetApiSvc -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name XblAuthManager -StartupType Disabled -ErrorAction SilentlyContinue
-          Set-Service -Name XblGameSave -StartupType Disabled -ErrorAction SilentlyContinue
           Stop-Service -Name SysMain -Force -ErrorAction SilentlyContinue
           Stop-Service -Name WSearch -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name dmwappushservice -Force -ErrorAction SilentlyContinue
           Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
           Stop-Service -Name BITS -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name WerSvc -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name WpnService -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name PcaSvc -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name TabletInputService -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name XboxNetApiSvc -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name XblAuthManager -Force -ErrorAction SilentlyContinue
-          Stop-Service -Name XblGameSave -Force -ErrorAction SilentlyContinue
 
       - name: Network Optimization
         run: |
           netsh int tcp set global autotuninglevel=normal
           netsh int tcp set global chimney=enabled
           netsh int tcp set global rss=enabled
-          netsh int tcp set global timestamps=disabled
-          netsh int tcp set global initialRto=2000
-          netsh int tcp set global nonsackrttresiliency=disabled
-          netsh int tcp set global dca=enabled
-          netsh int tcp set global netdma=enabled
-          netsh int tcp set global ecncapability=disabled
-          netsh int tcp set global congestionprovider=ctcp
-          netsh int tcp set global autotuninglevel=experimental
-          netsh int ip set global taskoffload=enabled
-          netsh int ip set global neighborcachelimit=100
-
-      - name: Disk Optimization
-        run: |
-          defrag C: /H /U /V
-          fsutil behavior set DisableDeleteNotify 0
-          fsutil behavior set DisableLastAccess 1
-          fsutil behavior set EncryptPagingFile 0
-          powercfg -h off
-
-      - name: Process Priority Optimization
-        run: |
-          Set-ProcessPriority -Name System -Priority High
-          Set-ProcessPriority -Name svchost -Priority AboveNormal
 
       - name: Install Tailscale
         run: |
