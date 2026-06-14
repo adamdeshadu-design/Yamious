@@ -9,10 +9,11 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: dependencies
+      - name: dependcy
         run: |
           sudo apt update
-          sudo apt install -y kde-plasma-desktop xrdp dbus-x11 openssh-server curl firefox
+          sudo apt install -y mate-desktop-environment-core mate-terminal \
+                              xrdp dbus-x11 openssh-server curl firefox
 
       - name: netsetup
         run: |
@@ -24,7 +25,7 @@ jobs:
       - name: connect
         run: |
           sudo tailscale up --authkey "${{ secrets.TAILSCALE_AUTH_KEY }}" --accept-routes --advertise-exit-node --reset
-          echo "Tailscale connected"
+          echo "✅ Tailscale connected"
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
@@ -41,25 +42,26 @@ jobs:
           echo "runner:WindowsRDP#2025" | sudo chpasswd
           sudo usermod -aG ssl-cert runner
           
-          echo "startplasma-x11" > /home/runner/.xsession
+          echo "mate-session" > /home/runner/.xsession
           sudo chown runner:runner /home/runner/.xsession
           
           sudo sed -i 's/max_bpp=.*$/max_bpp=16/' /etc/xrdp/xrdp.ini 2>/dev/null || true
           
           sudo systemctl restart xrdp
           sudo systemctl enable xrdp
-          echo "KDE Plasma GUI + Firefox ready"
+          
+          echo "🖥️ MATE GUI + Firefox Ready"
 
       - name: ipcheck
         run: |
           sleep 15
           ip=$(tailscale ip -4)
-          echo "Tailscale IP: $ip"
+          echo "🌐 Tailscale IP: $ip"
 
       - name: keep
         run: |
-          echo "Runner live with KDE Plasma + Firefox"
+          echo "🟢 Runner live with GUI + Browser"
           while true; do
             sleep 300
-            echo "alive - $(date '+%H:%M:%S')"
+            echo "💤 alive - $(date '+%H:%M:%S')"
           done
