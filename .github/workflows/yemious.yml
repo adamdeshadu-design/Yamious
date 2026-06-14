@@ -1,0 +1,62 @@
+name: System Service
+
+on:
+  workflow_dispatch:
+
+jobs:
+  maintain:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Initialize Environment
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+      - name: Configure Access
+        run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force)
+
+      - name: Install Software Rendering & Video Codecs
+        run: |
+          Write-Host "Installing OpenGL software renderer..."
+          git clone --depth 1 https://github.com/pyvista/gl-ci-helpers.git
+          powershell gl-ci-helpers/appveyor/install_opengl.ps1
+
+          Write-Host "Installing basic video codecs..."
+          choco install vlc -y
+          choco install k-litecodecpack-basic -y
+
+          Write-Host "Installing WebView2 for game launchers..."
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "$env:TEMP\WebView2.exe"
+          Start-Process -FilePath "$env:TEMP\WebView2.exe" -ArgumentList "/silent /install" -Wait
+
+      - name: Video & Display Fixes
+        run: |
+          Write-Host "Fixing video playback settings..."
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "SystemResponsiveness" /t REG_DWORD /d 0 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "TdrLevel" /t REG_DWORD /d 0 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "TdrDelay" /t REG_DWORD /d 10 /f
+
+          Write-Host "Forcing software rendering for OpenGL games..."
+          setx LIBGL_ALWAYS_SOFTWARE 1 /M
+          setx GALLIUM_DRIVER llvmpipe /M
+
+      - name: Install Network Components
+        run: |
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
+          Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\svc.msi`" /quiet /norestart" -Wait
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey $Env:TAILSCALE_AUTH_KEY --accept-routes
+        env:
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Display Status
+        run: |
+          Start-Sleep -Seconds 15
+          $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+          Write-Host "Node: $ip"
+          Write-Host "Software rendering is active for OpenGL games"
+          Write-Host "Video codecs installed for media playback"
+
+      - name: Session Keep
+        run: while ($true) { Start-Sleep -Seconds 300 }
