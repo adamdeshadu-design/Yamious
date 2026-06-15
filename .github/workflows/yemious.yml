@@ -1,4 +1,4 @@
-name: System Service
+name: System Service 2
 
 on:
   workflow_dispatch:
