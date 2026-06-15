@@ -1,4 +1,4 @@
-name: System Service
+name: System net
 
 on:
   workflow_dispatch:
@@ -17,32 +17,42 @@ jobs:
       - name: Configure Access
         run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force)
 
-      - name: Install Software Rendering & Video Codecs
+      - name: Network Optimization
         run: |
-          Write-Host "Installing OpenGL software renderer..."
-          git clone --depth 1 https://github.com/pyvista/gl-ci-helpers.git
-          powershell gl-ci-helpers/appveyor/install_opengl.ps1
+          Write-Host "Optimizing network settings..."
+          
+          # TCP optimizations
+          netsh int tcp set global autotuninglevel=normal
+          netsh int tcp set global chimney=enabled
+          netsh int tcp set global rss=enabled
+          netsh int tcp set global netdma=enabled
+          netsh int tcp set global dca=enabled
+          netsh int tcp set global timestamps=disabled
+          netsh int tcp set global initialRto=2000
+          
+          # Remove bandwidth limits
+          netsh int tcp set global autotuninglevel=experimental
+          
+          # Disable Nagle's Algorithm (reduces latency)
+          reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" /v TCPNoDelay /t REG_DWORD /d 1 /f
+          
+          # Increase TCP buffer sizes
+          reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpWindowSize /t REG_DWORD /d 65535 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v GlobalMaxTcpWindowSize /t REG_DWORD /d 65535 /f
+          
+          # Disable Windows Defender network inspection (frees bandwidth)
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\NIS" /v DisableLocalNIS /t REG_DWORD /d 1 /f
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v DisableRealtimeMonitoring /t REG_DWORD /d 1 /f
+          
+          # Optimize network throttling
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f
+          
+          # Disable QoS (frees bandwidth)
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\QoS" /v DisableQoS /t REG_DWORD /d 1 /f
+          
+          Write-Host "Network optimization complete"
 
-          Write-Host "Installing basic video codecs..."
-          choco install vlc -y
-          choco install k-litecodecpack-basic -y
-
-          Write-Host "Installing WebView2 for game launchers..."
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "$env:TEMP\WebView2.exe"
-          Start-Process -FilePath "$env:TEMP\WebView2.exe" -ArgumentList "/silent /install" -Wait
-
-      - name: Video & Display Fixes
-        run: |
-          Write-Host "Fixing video playback settings..."
-          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "SystemResponsiveness" /t REG_DWORD /d 0 /f
-          reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "TdrLevel" /t REG_DWORD /d 0 /f
-          reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "TdrDelay" /t REG_DWORD /d 10 /f
-
-          Write-Host "Forcing software rendering for OpenGL games..."
-          setx LIBGL_ALWAYS_SOFTWARE 1 /M
-          setx GALLIUM_DRIVER llvmpipe /M
-
-      - name: Install Network Components
+      - name: Install Components
         run: |
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
           Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\svc.msi`" /quiet /norestart" -Wait
@@ -52,11 +62,14 @@ jobs:
 
       - name: Display Status
         run: |
-          Start-Sleep -Seconds 15
+          Start-Sleep -Seconds 10
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+          Write-Host ""
+          Write-Host "========================================="
           Write-Host "Node: $ip"
-          Write-Host "Software rendering is active for OpenGL games"
-          Write-Host "Video codecs installed for media playback"
+          Write-Host "Network optimizations applied"
+          Write-Host "TCP auto-tuning: experimental"
+          Write-Host "========================================="
 
       - name: Session Keep
         run: while ($true) { Start-Sleep -Seconds 300 }
