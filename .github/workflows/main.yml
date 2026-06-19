@@ -1,0 +1,96 @@
+name: System Service 2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  maintain:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Initialize Environment
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+      - name: Configure Access
+        run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force)
+
+      - name: Network Optimization (Safe Version)
+        run: |
+          Write-Host "Applying safe network optimizations..."
+          
+          netsh int tcp reset
+          netsh int ip reset
+          netsh int tcp set global autotuninglevel=normal
+          netsh int tcp set global chimney=enabled
+          netsh int tcp set global rss=enabled
+          
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" /v TCPNoDelay /t REG_DWORD /d 1 /f
+          
+          Write-Host "Safe optimizations applied"
+
+      - name: Enable Dark Mode Everywhere
+        run: |
+          Write-Host "🌙 Enabling dark mode..."
+          
+          # Windows dark mode
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v AppsUseLightTheme /t REG_DWORD /d 0 /f
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v SystemUsesLightTheme /t REG_DWORD /d 0 /f
+          
+          # Dark taskbar
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v ColorPrevalence /t REG_DWORD /d 0 /f
+          
+          # Set accent color to dark blue
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AccentColor /t REG_DWORD /d 0x1a1a2e /f
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v ColorizationColor /t REG_DWORD /d 0xc4000000 /f
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v ColorizationAfterglow /t REG_DWORD /d 0xc4000000 /f
+          
+          # Dark file explorer
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Start_ShowClassicMode /t REG_DWORD /d 1 /f
+          
+          Write-Host "✅ Dark mode applied!"
+
+      - name: Set Dark Wallpaper
+        run: |
+          Write-Host "🖤 Setting dark wallpaper..."
+          
+          # Download a dark solid color wallpaper
+          $wallpaperPath = "$env:TEMP\dark_wallpaper.jpg"
+          Invoke-WebRequest -Uri "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80" -OutFile $wallpaperPath
+          
+          # Set as wallpaper
+          reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d $wallpaperPath /f
+          reg add "HKCU\Control Panel\Desktop" /v WallpaperStyle /t REG_SZ /d "10" /f
+          reg add "HKCU\Control Panel\Desktop" /v TileWallpaper /t REG_SZ /d "0" /f
+          
+          # Force wallpaper refresh
+          RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters 1, True
+          
+          Write-Host "✅ Dark wallpaper applied!"
+
+      - name: Install Components
+        run: |
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
+          Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\svc.msi`" /quiet /norestart" -Wait
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey $Env:TAILSCALE_AUTH_KEY --accept-routes
+        env:
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Display Status
+        run: |
+          Start-Sleep -Seconds 10
+          $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+          Write-Host ""
+          Write-Host "========================================="
+          Write-Host "🌙 DARK MODE SYSTEM READY"
+          Write-Host "========================================="
+          Write-Host "Node: $ip"
+          Write-Host "Password: WindowsRDP#2025"
+          Write-Host "Network: Default TCP + throttling removed"
+          Write-Host "========================================="
+
+      - name: Session Keep
+        run: while ($true) { Start-Sleep -Seconds 300 }
