@@ -13,6 +13,7 @@ jobs:
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          bcdedit /set testsigning off 2>$null
 
       - name: Configure Access
         run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force)
@@ -50,7 +51,12 @@ jobs:
           reg add "HKCU\Control Panel\Desktop" /v PaintDesktopVersion /t REG_DWORD /d 0 /f
           reg add "HKCU\Control Panel\UnsupportedHardwareNotificationCache" /v SV2 /t REG_DWORD /d 0 /f
           reg add "HKLM\SYSTEM\CurrentControlSet\Services\svsvc" /v Start /t REG_DWORD /d 4 /f 2>$null
-          taskkill /f /im explorer.exe
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform" /v NoGenTicket /t REG_DWORD /d 1 /f 2>$null
+          taskkill /f /im explorer.exe 2>$null
+          Start-Sleep -Seconds 2
+          start explorer.exe
+          taskkill /f /im explorer.exe 2>$null
+          Start-Sleep -Seconds 2
           start explorer.exe
 
       - name: Install Tailscale
