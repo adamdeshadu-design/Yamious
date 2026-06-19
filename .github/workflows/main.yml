@@ -45,6 +45,11 @@ jobs:
           reg add "HKCU\Control Panel\Desktop" /v TileWallpaper /t REG_SZ /d "0" /f
           RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters 1, True
 
+      - name: Force Dark Taskbar
+        run: |
+          taskkill /f /im explorer.exe
+          start explorer.exe
+
       - name: Install Tailscale
         run: |
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
@@ -55,8 +60,8 @@ jobs:
 
       - name: Show IP
         run: |
-          Start-Sleep -Seconds 15
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+          Write-Host ""
           Write-Host "IP: $ip"
           Write-Host "Username: runneradmin"
           Write-Host "Password: WindowsRDP#2025"
