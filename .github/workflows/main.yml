@@ -46,18 +46,18 @@ jobs:
           reg add "HKCU\Control Panel\Desktop" /v TileWallpaper /t REG_SZ /d "0" /f
           RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters 1, True
 
-      - name: Remove Watermark
+      - name: Remove Watermark (UWD)
         run: |
+          $uwdPath = "$env:TEMP\uwd.exe"
+          Invoke-WebRequest -Uri "https://github.com/pr701/universal-watermark-disabler/releases/download/v1.0.0.6-2015/UWD.x64.exe" -OutFile $uwdPath
+          & $uwdPath /silent
           reg add "HKCU\Control Panel\Desktop" /v PaintDesktopVersion /t REG_DWORD /d 0 /f
           reg add "HKCU\Control Panel\UnsupportedHardwareNotificationCache" /v SV2 /t REG_DWORD /d 0 /f
           reg add "HKLM\SYSTEM\CurrentControlSet\Services\svsvc" /v Start /t REG_DWORD /d 4 /f 2>$null
-          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform" /v NoGenTicket /t REG_DWORD /d 1 /f 2>$null
           taskkill /f /im explorer.exe 2>$null
-          Start-Sleep -Seconds 2
+          Start-Sleep -Seconds 3
           start explorer.exe
-          taskkill /f /im explorer.exe 2>$null
-          Start-Sleep -Seconds 2
-          start explorer.exe
+          Start-Sleep -Seconds 3
 
       - name: Install Tailscale
         run: |
