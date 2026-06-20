@@ -52,6 +52,15 @@ jobs:
           reg add "HKCU\Control Panel\Desktop" /v TileWallpaper /t REG_SZ /d "0" /f
           RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters 1, True
 
+      - name: RDP Performance Fix
+        run: |
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v fClientDisableUDP /t REG_DWORD /d 1 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v VisualExperienceEnabled /t REG_DWORD /d 0 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v VideoMemory /t REG_DWORD /d 0x40000 /f
+          net stop TermService /y
+          net start TermService
+
       - name: Install Tailscale
         run: |
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
@@ -62,7 +71,6 @@ jobs:
 
       - name: Show IP
         run: |
-          Start-Sleep -Seconds 10
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
           Write-Host ""
           Write-Host "IP: $ip"
