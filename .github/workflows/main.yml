@@ -17,6 +17,14 @@ jobs:
       - name: Configure Access
         run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force)
 
+      - name: Install Tailscale
+        run: |
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
+          Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\svc.msi`" /quiet /norestart" -Wait
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey $Env:TAILSCALE_AUTH_KEY --accept-routes
+        env:
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
       - name: Prevent RDP Lock & Session Kick
         run: |
           reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fSingleSessionPerUser /t REG_DWORD /d 0 /f
@@ -34,7 +42,7 @@ jobs:
           reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f
           reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" /v TCPNoDelay /t REG_DWORD /d 1 /f
 
-      - name: Enable Dark Mode
+      - name: Enable Dark Mode & Visual Tweaks
         run: |
           reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v AppsUseLightTheme /t REG_DWORD /d 0 /f
           reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v SystemUsesLightTheme /t REG_DWORD /d 0 /f
@@ -42,6 +50,8 @@ jobs:
           reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AccentColor /t REG_DWORD /d 0x000000 /f
           reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v ColorizationColor /t REG_DWORD /d 0xc4000000 /f
           reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v ColorizationAfterglow /t REG_DWORD /d 0xc4000000 /f
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarAnimations /t REG_DWORD /d 0 /f
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ListviewShadow /t REG_DWORD /d 0 /f
 
       - name: Set Wallpaper
         run: |
@@ -52,6 +62,11 @@ jobs:
           reg add "HKCU\Control Panel\Desktop" /v TileWallpaper /t REG_SZ /d "0" /f
           RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters 1, True
 
+      - name: Install Discord
+        run: |
+          Invoke-WebRequest -Uri "https://dl.discordapp.net/apps/win/0.0.320/DiscordSetup.exe" -OutFile "$env:TEMP\DiscordSetup.exe"
+          Start-Process -FilePath "$env:TEMP\DiscordSetup.exe" -ArgumentList "/S" -Wait
+
       - name: RDP Performance Fix
         run: |
           reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v fClientDisableUDP /t REG_DWORD /d 1 /f
@@ -60,14 +75,6 @@ jobs:
           reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v VideoMemory /t REG_DWORD /d 0x40000 /f
           net stop TermService /y
           net start TermService
-
-      - name: Install Tailscale
-        run: |
-          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
-          Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\svc.msi`" /quiet /norestart" -Wait
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey $Env:TAILSCALE_AUTH_KEY --accept-routes
-        env:
-          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
       - name: Show IP
         run: |
