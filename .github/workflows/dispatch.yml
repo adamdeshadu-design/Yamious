@@ -1,4 +1,4 @@
-name: System Service 2
+name: System Service 24
 
 on:
   workflow_dispatch:
@@ -9,51 +9,115 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Initialize Environment
+      - name: Initialize Environment & Sync Data
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Configure RDP Access
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force)
 
-      - name: Configure Access
-        run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString "WindowsRDP#2025" -AsPlainText -Force)
-
-      - name: Network Optimization (Safe Version)
+      - name: Prevent RDP Lock & Session Kick
         run: |
-          Write-Host "Applying safe network optimizations..."
-          
-          # Reset TCP to Windows defaults
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fSingleSessionPerUser /t REG_DWORD /d 0 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v SecurityLayer /t REG_DWORD /d 0 /f
+
+      - name: Network Optimization
+        run: |
           netsh int tcp reset
           netsh int ip reset
-          
-          # Apply only proven optimizations
           netsh int tcp set global autotuninglevel=normal
           netsh int tcp set global chimney=enabled
           netsh int tcp set global rss=enabled
-          
-          # Remove bandwidth throttling (the only one that reliably works)
           reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f
-          
-          # Disable Nagle's Algorithm (reduces latency)
           reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" /v TCPNoDelay /t REG_DWORD /d 1 /f
-          
-          Write-Host "Safe optimizations applied"
 
-      - name: Install Components
+      - name: Enable Dark Mode
         run: |
-          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v AppsUseLightTheme /t REG_DWORD /d 0 /f
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v SystemUsesLightTheme /t REG_DWORD /d 0 /f
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v ColorPrevalence /t REG_DWORD /d 0 /f
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AccentColor /t REG_DWORD /d 0x000000 /f
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v ColorizationColor /t REG_DWORD /d 0xc4000000 /f
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v ColorizationAfterglow /t REG_DWORD /d 0xc4000000 /f
+
+      - name: Set Wallpaper
+        run: |
+          $path = "$env:TEMP\wall.jpg"
+          Invoke-WebRequest -Uri "https://unsplash.com" -OutFile $path
+          reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d $path /f
+          reg add "HKCU\Control Panel\Desktop" /v WallpaperStyle /t REG_SZ /d "10" /f
+          reg add "HKCU\Control Panel\Desktop" /v TileWallpaper /t REG_SZ /d "0" /f
+          RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters 1, True
+
+      - name: RDP Performance Fix
+        run: |
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v fClientDisableUDP /t REG_DWORD /d 1 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v VisualExperienceEnabled /t REG_DWORD /d 0 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v VideoMemory /t REG_DWORD /d 0x40000 /f
+          net stop TermService /y
+          net start TermService
+
+      - name: Deploy SillyTavern App Environment
+        run: |
+          git clone https://github.com C:\SillyTavern
+          if (Test-Path "saved-data") {
+              Copy-Item -Path "saved-data\*" -Destination "C:\SillyTavern\data\" -Recurse -Force
+              Write-Host "Restored historical chat and character databases successfully."
+          }
+          cd C:\SillyTavern
+          npm install
+          Start-Process cmd.exe -ArgumentList "/c node server.js" -WindowStyle Minimized
+
+      - name: Install Tailscale Network Connection
+        run: |
+          Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "$env:TEMP\svc.msi"
           Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\svc.msi`" /quiet /norestart" -Wait
           & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey $Env:TAILSCALE_AUTH_KEY --accept-routes
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Display Status
+      - name: Output RDP Login Data
         run: |
-          Start-Sleep -Seconds 10
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
           Write-Host ""
-          Write-Host "Node: $ip"
-          Write-Host "Network: Default TCP settings + bandwidth throttling removed"
-          Write-Host "Expected speed: 1-3.5 Gbps"
+          Write-Host "=========================================="
+          Write-Host "IP ADDRESS: $ip"
+          Write-Host "USERNAME: runneradmin"
+          Write-Host "PASSWORD: WindowsRDP#2025"
+          Write-Host "=========================================="
 
-      - name: Session Keep
-        run: while ($true) { Start-Sleep -Seconds 300 }
+      - name: Keep Alive & Live Cloud Sync Engine
+        run: |
+          $repoDir = $env:GITHUB_WORKSPACE
+          git config --global user.name "Cloud-Tavern-Backup-Bot"
+          git config --global user.email "backup-bot@github.com"
+          
+          while ($true) {
+              Start-Sleep -Seconds 180
+              Write-Host "Initiating auto-save sweep..."
+              
+              if (Test-Path "C:\SillyTavern\data") {
+                  New-Item -ItemType Directory -Force -Path "$repoDir\saved-data" | Out-Null
+                  Copy-Item -Path "C:\SillyTavern\data\*" -Destination "$repoDir\saved-data\" -Recurse -Force
+                  
+                  cd $repoDir
+                  git add saved-data/
+                  
+                  # Check if there are actual new chat messages/changes to save
+                  $status = git status --porcelain
+                  if ($status) {
+                      git commit -m "Automated chat checkpoint save [skip ci]"
+                      git push https://x-access-token:${{ secrets.SYNC_TOKEN }}@://github.com{{ github.repository }}.git HEAD:main
+                      Write-Host "Chat adjustments synced to private repository repository safely."
+                  } else {
+                      Write-Host "No text adjustments detected. Sync skipped."
+                  }
+              }
+          }
