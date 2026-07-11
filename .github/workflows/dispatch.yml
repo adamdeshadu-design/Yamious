@@ -55,7 +55,7 @@ jobs:
           net stop TermService /y
           net start TermService
 
-      - name: Deploy SillyTavern App Environment
+      - name: Deploy SillyTavern Chatbot
         run: |
           git clone https://github.com/SillyTavern/SillyTavern.git C:\SillyTavern
           if (Test-Path "saved-data") {
@@ -66,15 +66,15 @@ jobs:
           npm install
           Start-Process cmd.exe -ArgumentList "/c node server.js" -WindowStyle Minimized
 
-      - name: Install Tailscale Network Connection
+      - name: Install Tailscale
         run: |
-          Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "$env:TEMP\svc.msi"
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "$env:TEMP\svc.msi"
           Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\svc.msi`" /quiet /norestart" -Wait
           & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey $Env:TAILSCALE_AUTH_KEY --accept-routes
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Output RDP Login Data
+      - name: Show RDP Login Info
         run: |
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
           Write-Host ""
@@ -83,8 +83,9 @@ jobs:
           Write-Host "USERNAME: runneradmin"
           Write-Host "PASSWORD: WindowsRDP#2025"
           Write-Host "=========================================="
+          Write-Host "SillyTavern running at: http://localhost:8000"
 
-      - name: Keep Alive & Live Cloud Sync Engine
+      - name: Keep Alive & Auto-Sync Chat Data
         run: |
           $repoDir = $env:GITHUB_WORKSPACE
           git config --global user.name "Cloud-Tavern-Backup-Bot"
@@ -101,12 +102,11 @@ jobs:
                   cd $repoDir
                   git add saved-data/
                   
-                  # Check if there are actual new chat messages/changes to save
                   $status = git status --porcelain
                   if ($status) {
                       git commit -m "Automated chat checkpoint save [skip ci]"
-                      git push https://x-access-token:${{ secrets.SYNC_TOKEN }}@://github.com{{ github.repository }}.git HEAD:main
-                      Write-Host "Chat adjustments synced to private repository repository safely."
+                      git push https://x-access-token:${{ secrets.SYNC_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+                      Write-Host "Chat adjustments synced to private repository safely."
                   } else {
                       Write-Host "No text adjustments detected. Sync skipped."
                   }
