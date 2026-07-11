@@ -57,7 +57,7 @@ jobs:
 
       - name: Deploy SillyTavern App Environment
         run: |
-          git clone https://github.com C:\SillyTavern
+          git clone https://github.com/SillyTavern/SillyTavern.git C:\SillyTavern
           if (Test-Path "saved-data") {
               Copy-Item -Path "saved-data\*" -Destination "C:\SillyTavern\data\" -Recurse -Force
               Write-Host "Restored historical chat and character databases successfully."
