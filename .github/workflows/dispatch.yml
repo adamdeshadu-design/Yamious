@@ -1,4 +1,4 @@
-name: System Service 24
+name: System Service lafp
 
 on:
   workflow_dispatch:
