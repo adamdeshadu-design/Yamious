@@ -74,7 +74,7 @@ jobs:
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Show RDP Login Info
+      - name: Show ip
         run: |
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
           Write-Host ""
@@ -85,7 +85,7 @@ jobs:
           Write-Host "=========================================="
           Write-Host "SillyTavern running at: http://localhost:8000"
 
-      - name: Keep Alive & Auto-Sync Chat Data
+      - name: Keep Alive 
         run: |
           $repoDir = $env:GITHUB_WORKSPACE
           git config --global user.name "Cloud-Tavern-Backup-Bot"
