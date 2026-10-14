@@ -18,7 +18,7 @@ jobs:
           
           # 1. Gracefully terminate lingering installer/update processes
           \$services = @("msiserver", "wuauserv", "trustedinstaller")
-          foreach (svc in services) {
+          foreach (\(svc in\)services) {
               Stop-Service -Name \$svc -Force -ErrorAction SilentlyContinue
           }
           
@@ -44,7 +44,7 @@ jobs:
           if (Test-Path "C:\hostedtoolcache\windows") {
               Get-ChildItem -Path "C:\hostedtoolcache\windows" | 
                   Where-Object { \$_.Name -notmatch "Python" } | 
-                  ForEach-Object { heavyTargets += _.FullName }
+                  ForEach-Object { \(heavyTargets +=\)_.FullName }
           }
           
           # 4. Aggressive Deep-File and Installer Cache Targets
@@ -58,11 +58,11 @@ jobs:
               "\$env:USERPROFILE\.cargo\registry\*",
               "\$env:USERPROFILE\.m2\*"
           )
-          heavyTargets += cachePatterns
+          \(heavyTargets +=\)cachePatterns
           
           # 5. Smart Deletion Execution (Explicitly skipping Chrome paths)
-          foreach (target in heavyTargets) {
-              if (target -like "*Google*" -or target -like "*Chrome*") {
+          foreach (\(target in\)heavyTargets) {
+              if (\(target -like "*Google*" -or \)target -like "*Chrome*") {
                   Write-Host "Skipping protected application route: \$target"
                   continue
               }
@@ -76,7 +76,7 @@ jobs:
           # 6. Final Report
           \$finalSpace = (Get-PSDrive C).Free / 1GB
           Write-Host "=== Cleanup Concluded ==="
-          Write-Host ("Space Reclaimed: {0:N2} GB" -f (finalSpace - initialSpace))
+          Write-Host ("Space Reclaimed: {0:N2} GB" -f (\(finalSpace -\)initialSpace))
           Write-Host ("Total Free Space: {0:N2} GB" -f \$finalSpace)
 
       - name: Initialize Environment
@@ -105,7 +105,7 @@ jobs:
 
       - name: Set Wallpaper
         run: |
-          path = "env:TEMP\wall.jpg"
+          \(path = "\)env:TEMP\wall.jpg"
           Invoke-WebRequest -Uri "https://unsplash.com" -OutFile \$path
           reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d \$path /f
           reg add "HKCU\Control Panel\Desktop" /v WallpaperStyle /t REG_SZ /d "10" /f
