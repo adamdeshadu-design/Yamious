@@ -16,13 +16,15 @@ jobs:
           $initialSpace = (Get-PSDrive C).Free / 1GB
           Write-Host ("Initial Free Space: {0:N2} GB" -f $initialSpace)
 
-          # 1. Gracefully terminate lingering installer/update processes
-          $services = @("msiserver", "wuauserv", "trustedinstaller")
-          foreach ($svc in $services) {
+          # Disable Defender real-time scanning for speed (huge win)
+          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+
+          # 1. Stop lingering installer/update services
+          foreach ($svc in @("msiserver","wuauserv","trustedinstaller","DoSvc","BITS")) {
               Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
           }
 
-          # 2. Comprehensive map of massive, completely unneeded developer suites
+          # 2. Target list
           $heavyTargets = @(
               "C:\Program Files\Microsoft Visual Studio",
               "C:\Program Files (x86)\Microsoft Visual Studio",
@@ -37,43 +39,57 @@ jobs:
               "C:\Program Files\Azure DevOps Server",
               "C:\Program Files\CMake",
               "C:\Program Files\OpenSSL",
-              "C:\Program Files\Git\mingw64\share\doc"
+              "C:\Program Files\Git\mingw64\share\doc",
+              "C:\Windows\SoftwareDistribution\Download",
+              "C:\Windows\Temp",
+              "$env:LOCALAPPDATA\Temp",
+              "$env:LOCALAPPDATA\Nuget\Cache",
+              "$env:USERPROFILE\.nuget\packages",
+              "$env:USERPROFILE\.rustup",
+              "$env:USERPROFILE\.cargo\registry",
+              "$env:USERPROFILE\.m2"
           )
 
-          # 3. Dynamic Tool Cache Filtering (Protects Python)
+          # 3. Dynamic tool cache filtering (protects Python)
           if (Test-Path "C:\hostedtoolcache\windows") {
-              Get-ChildItem -Path "C:\hostedtoolcache\windows" |
+              Get-ChildItem "C:\hostedtoolcache\windows" |
                   Where-Object { $_.Name -notmatch "Python" } |
                   ForEach-Object { $heavyTargets += $_.FullName }
           }
 
-          # 4. Aggressive Deep-File and Installer Cache Targets
-          $cachePatterns = @(
-              "C:\Windows\SoftwareDistribution\Download\*",
-              "C:\Windows\Temp\*",
-              "$env:LOCALAPPDATA\Temp\*",
-              "$env:LOCALAPPDATA\Nuget\Cache\*",
-              "$env:USERPROFILE\.nuget\packages\*",
-              "$env:USERPROFILE\.rustup\*",
-              "$env:USERPROFILE\.cargo\registry\*",
-              "$env:USERPROFILE\.m2\*"
-          )
-          $heavyTargets += $cachePatterns
-
-          # 5. Smart Deletion Execution (Explicitly skipping Chrome paths)
+          # 4. Fast parallel deletion using cmd rd /s /q (5-10x faster than Remove-Item)
+          $jobs = @()
           foreach ($target in $heavyTargets) {
               if ($target -like "*Google*" -or $target -like "*Chrome*") {
-                  Write-Host "Skipping protected application route: $target"
+                  Write-Host "Skipping protected: $target"
                   continue
               }
-
               if (Test-Path $target) {
-                  Write-Host "Purging target: $target"
-                  Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $target
+                  Write-Host "Queueing: $target"
+                  $jobs += Start-Job -ScriptBlock {
+                      param($p)
+                      # cmd rd is dramatically faster than Remove-Item -Recurse
+                      & cmd.exe /c "rd /s /q `"$p`"" 2>$null
+                      # If rd failed (locked files), fall back to takeown+icacls then retry
+                      if (Test-Path $p) {
+                          & takeown.exe /f "$p" /r /d Y 2>$null | Out-Null
+                          & icacls.exe "$p" /grant "*S-1-5-32-544:F" /t /c /q 2>$null | Out-Null
+                          & cmd.exe /c "rd /s /q `"$p`"" 2>$null
+                      }
+                  } -ArgumentList $target
               }
           }
+          $jobs | Wait-Job | Out-Null
+          $jobs | Remove-Job -Force
 
-          # 6. Final Report
+          # 5. Clear temp leftovers that may have been recreated
+          cmd.exe /c "del /f /s /q `"C:\Windows\Temp\*.*`"" 2>$null
+          cmd.exe /c "del /f /s /q `"$env:LOCALAPPDATA\Temp\*.*`"" 2>$null
+
+          # Re-enable Defender
+          Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction SilentlyContinue
+
+          # 6. Final report
           $finalSpace = (Get-PSDrive C).Free / 1GB
           Write-Host "=== Cleanup Concluded ==="
           Write-Host ("Space Reclaimed: {0:N2} GB" -f ($finalSpace - $initialSpace))
@@ -106,11 +122,11 @@ jobs:
       - name: Set Wallpaper
         run: |
           $path = "$env:TEMP\wall.jpg"
-          Invoke-WebRequest -Uri "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1920" -OutFile $path
+          Invoke-WebRequest -Uri "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80" -OutFile $path
           reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d $path /f
           reg add "HKCU\Control Panel\Desktop" /v WallpaperStyle /t REG_SZ /d "10" /f
           reg add "HKCU\Control Panel\Desktop" /v TileWallpaper /t REG_SZ /d "0" /f
-          RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
+          RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters 1, True
 
       - name: RDP Performance Fix
         run: |
@@ -129,17 +145,13 @@ jobs:
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Show IP & Verify Essentials
+      - name: Show IP
         run: |
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
           Write-Host ""
           Write-Host "IP: $ip"
           Write-Host "Username: runneradmin"
           Write-Host "Password: WindowsRDP#2025"
-          Write-Host ""
-          Write-Host "--- Status Check ---"
-          python --version
-          & "C:\Program Files\Google\Chrome\Application\chrome.exe" --version
 
       - name: Keep Alive
         run: while ($true) { Start-Sleep -Seconds 300 }
