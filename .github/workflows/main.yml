@@ -5,7 +5,7 @@ on:
 
 jobs:
   maintain:
-    runs-on: windows-latest
+    runs-on: 2022
     timeout-minutes: 360
 
     steps:
