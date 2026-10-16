@@ -5,96 +5,10 @@ on:
 
 jobs:
   maintain:
-    runs-on: 2022
+    runs-on: windows-2022
     timeout-minutes: 360
 
     steps:
-      - name: Smart Aggressive Cleanup (Keep Python & Chrome)
-        shell: powershell
-        run: |
-          Write-Host "=== Starting Smart System Cleanup ==="
-          $initialSpace = (Get-PSDrive C).Free / 1GB
-          Write-Host ("Initial Free Space: {0:N2} GB" -f $initialSpace)
-
-          # Disable Defender real-time scanning for speed (huge win)
-          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
-
-          # 1. Stop lingering installer/update services
-          foreach ($svc in @("msiserver","wuauserv","trustedinstaller","DoSvc","BITS")) {
-              Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
-          }
-
-          # 2. Target list
-          $heavyTargets = @(
-              "C:\Program Files\Microsoft Visual Studio",
-              "C:\Program Files (x86)\Microsoft Visual Studio",
-              "C:\ProgramData\Microsoft\VisualStudio",
-              "C:\ProgramData\Package Cache",
-              "C:\Program Files\Android",
-              "C:\Microsoft\AndroidNDK",
-              "C:\Program Files\LLVM",
-              "C:\Program Files\PostgreSQL",
-              "C:\Program Files\Microsoft SQL Server",
-              "C:\Program Files (x86)\Microsoft SQL Server",
-              "C:\Program Files\Azure DevOps Server",
-              "C:\Program Files\CMake",
-              "C:\Program Files\OpenSSL",
-              "C:\Program Files\Git\mingw64\share\doc",
-              "C:\Windows\SoftwareDistribution\Download",
-              "C:\Windows\Temp",
-              "$env:LOCALAPPDATA\Temp",
-              "$env:LOCALAPPDATA\Nuget\Cache",
-              "$env:USERPROFILE\.nuget\packages",
-              "$env:USERPROFILE\.rustup",
-              "$env:USERPROFILE\.cargo\registry",
-              "$env:USERPROFILE\.m2"
-          )
-
-          # 3. Dynamic tool cache filtering (protects Python)
-          if (Test-Path "C:\hostedtoolcache\windows") {
-              Get-ChildItem "C:\hostedtoolcache\windows" |
-                  Where-Object { $_.Name -notmatch "Python" } |
-                  ForEach-Object { $heavyTargets += $_.FullName }
-          }
-
-          # 4. Fast parallel deletion using cmd rd /s /q (5-10x faster than Remove-Item)
-          $jobs = @()
-          foreach ($target in $heavyTargets) {
-              if ($target -like "*Google*" -or $target -like "*Chrome*") {
-                  Write-Host "Skipping protected: $target"
-                  continue
-              }
-              if (Test-Path $target) {
-                  Write-Host "Queueing: $target"
-                  $jobs += Start-Job -ScriptBlock {
-                      param($p)
-                      # cmd rd is dramatically faster than Remove-Item -Recurse
-                      & cmd.exe /c "rd /s /q `"$p`"" 2>$null
-                      # If rd failed (locked files), fall back to takeown+icacls then retry
-                      if (Test-Path $p) {
-                          & takeown.exe /f "$p" /r /d Y 2>$null | Out-Null
-                          & icacls.exe "$p" /grant "*S-1-5-32-544:F" /t /c /q 2>$null | Out-Null
-                          & cmd.exe /c "rd /s /q `"$p`"" 2>$null
-                      }
-                  } -ArgumentList $target
-              }
-          }
-          $jobs | Wait-Job | Out-Null
-          $jobs | Remove-Job -Force
-
-          # 5. Clear temp leftovers that may have been recreated
-          cmd.exe /c "del /f /s /q `"C:\Windows\Temp\*.*`"" 2>$null
-          cmd.exe /c "del /f /s /q `"$env:LOCALAPPDATA\Temp\*.*`"" 2>$null
-
-          # Re-enable Defender
-          Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction SilentlyContinue
-
-          # 6. Final report
-          $finalSpace = (Get-PSDrive C).Free / 1GB
-          Write-Host "=== Cleanup Concluded ==="
-          Write-Host ("Space Reclaimed: {0:N2} GB" -f ($finalSpace - $initialSpace))
-          Write-Host ("Total Free Space: {0:N2} GB" -f $finalSpace)
-
       - name: Initialize Environment
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
